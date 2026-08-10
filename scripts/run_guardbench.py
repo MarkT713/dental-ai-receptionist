@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import subprocess
+import shutil
+# Fixed Git provenance commands use resolved executable paths, fixed argv, and no shell/user input.
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass
 from datetime import date
@@ -74,11 +76,14 @@ def main() -> int:
         submitter=args.submitter,
         policy_sha256=hashlib.sha256(args.policy.read_bytes()).hexdigest(),
     )
-    target_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
+    git_binary = shutil.which("git")
+    if not git_binary:
+        raise RuntimeError("git is required to capture target provenance")
+    target_commit = subprocess.run(  # nosec B603
+        [git_binary, "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout.strip()
-    target_dirty = bool(subprocess.run(
-        ["git", "status", "--porcelain"], cwd=ROOT, check=True, capture_output=True, text=True
+    target_dirty = bool(subprocess.run(  # nosec B603
+        [git_binary, "status", "--porcelain"], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout.strip())
     raw_report = json.loads(report_path.read_text(encoding="utf-8"))
     raw_report["manifest"]["target_git"] = {"commit": target_commit, "dirty": target_dirty}
