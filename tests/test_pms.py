@@ -35,6 +35,25 @@ def test_metadata_and_health_identify_public_demo(app_client):
     assert "GET /health" in metrics["by_route"]
 
 
+def test_public_sandbox_metadata_and_automatic_reset_boundary(app_client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "PUBLIC_SANDBOX", True)
+    monkeypatch.setattr(main, "AUTO_RESET_MINUTES", 60)
+    metadata = app_client.get("/metadata").json()
+    assert metadata["public_sandbox"] is True
+    assert metadata["automatic_reset_minutes"] == 60
+
+    created = app_client.post(
+        "/appointment-queue",
+        json={"patient_name": "Temporary Synthetic Visitor", "risk_level": "routine"},
+    )
+    assert created.status_code == 201
+    assert app_client.get("/appointment-queue").json()
+    main.reset_synthetic_data("Automatic public sandbox reset")
+    assert app_client.get("/appointment-queue").json() == []
+
+
 def test_patient_search_and_appointment_book_booking(app_client):
     patients = app_client.get("/patients", params={"name": "Doe", "dob": "1990-01-01"}).json()
     assert patients

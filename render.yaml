@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: dental-ai-receptionist-demo
+    runtime: docker
+    repo: https://github.com/MarkT713/dental-ai-receptionist
+    branch: main
+    plan: free
+    region: ohio
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: DENTAL_PRACTICE_NAME
+        value: BrightSmile Dental
+      - key: DENTAL_PUBLIC_SANDBOX
+        value: "true"
+      - key: DENTAL_AUTO_RESET_MINUTES
+        value: "60"
+      - key: DENTAL_SEED_DEMO_DATA
+        value: "true"
+      - key: DENTAL_DEMO_MODE
+        value: "true"
+      - key: DENTAL_AUTH_MODE
+        value: disabled
+      - key: DENTAL_RATE_LIMIT_PER_MINUTE
+        value: "60"
+      - key: DENTAL_DB_PATH
+        value: /tmp/dental-ai-receptionist-demo.db
+      - key: AI_PROVIDER
+        value: deterministic
+      - key: ALLOW_CLOUD_SYNTHETIC_DATA
+        value: "false"

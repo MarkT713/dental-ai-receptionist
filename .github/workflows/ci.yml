@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-and-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install development dependencies
+        run: pip install -e '.[dev]'
+      - name: Lint
+        run: ruff check --no-force-exclude practice_management_software/main.py practice_management_software/intake_engine.py voice_pipeline scripts tests
+      - name: Unit and API tests
+        run: pytest -q
+      - name: Intake safety evaluation gate
+        run: python scripts/run_evals.py
+      - name: Synthetic voice-turn simulation
+        run: python scripts/run_voice_simulation.py
+      - name: Public-release secret scan
+        run: python scripts/secret_scan.py
+      - name: Static security scan
+        run: bandit -q -r practice_management_software voice_pipeline scripts -x tests -s B101
+      - name: Dependency vulnerability audit
+        run: pip-audit -r requirements.lock
+      - name: Compile
+        run: python -m compileall -q practice_management_software voice_pipeline scripts tests
+      - name: Generate CycloneDX SBOM
+        run: cyclonedx-py requirements requirements.lock --output-file sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safety-eval-and-sbom
+          path: |
+            evals/latest-report.json
+            sbom.json
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t dental-ai-receptionist:test .
+      - name: Verify hardened runtime and health
+        run: |
+          set -euo pipefail
+          docker run -d --name dental-ai-ci \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001 \
+            --tmpfs /data:rw,noexec,nosuid,size=64m,uid=10001,gid=10001 \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            -p 127.0.0.1:18000:8000 \
+            dental-ai-receptionist:test
+          trap 'docker rm -f dental-ai-ci >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18000/health; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "${ready:-false}" = true
+          test "$(docker inspect dental-ai-ci --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker inspect dental-ai-ci --format '{{.HostConfig.ReadonlyRootfs}}')" = true
+          curl --fail --silent http://127.0.0.1:18000/metadata

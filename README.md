@@ -1,6 +1,7 @@
 # Dental AI Receptionist
 
-![Tests](https://img.shields.io/badge/tests-34%20passing-brightgreen)
+[![CI](https://github.com/MarkT713/dental-ai-receptionist/actions/workflows/ci.yml/badge.svg)](https://github.com/MarkT713/dental-ai-receptionist/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/tests-35%20passing-brightgreen)
 ![Evaluations](https://img.shields.io/badge/evals-46%2F46%20passing-brightgreen)
 
 A privacy-conscious **after-hours dental intake and staff-approval workflow** built with FastAPI, SQLite, structured AI extraction, a deterministic safety policy, and a mock dental practice-management dashboard.
@@ -62,6 +63,14 @@ Open:
 - Dashboard: <http://localhost:8000>
 - API docs: <http://localhost:8000/docs>
 
+### Hosted synthetic sandbox
+
+The included [Render Blueprint](render.yaml) deploys the Docker image as a free, public, synthetic-only sandbox in the Ohio region:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/MarkT713/dental-ai-receptionist)
+
+The hosted profile uses no cloud AI credentials, resets its fictional SQLite records every 60 minutes, rate-limits clients, and may also reset whenever Render restarts or spins down the free service. Cold starts are expected on the free instance type.
+
 ### Python
 
 Requires Python 3.11+.
@@ -95,7 +104,7 @@ python scripts/run_evals.py
 
 Current verified local release baseline:
 
-- `34` automated tests passing
+- `35` automated tests passing
 - `46/46` evaluation cases passing
 - `127/127` field assertions matched
 - `1.00` precision/recall/F1 for urgent and prompt-injection detection on this synthetic corpus

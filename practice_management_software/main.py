@@ -13,6 +13,7 @@ UI:   http://localhost:8000/
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import contextvars
 import hashlib
@@ -36,12 +37,29 @@ from intake_engine import extract_intake
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 PRACTICE_NAME = os.getenv("DENTAL_PRACTICE_NAME", "BrightSmile Dental")
+PUBLIC_SANDBOX = os.getenv("DENTAL_PUBLIC_SANDBOX", "false").strip().lower() in {"1", "true", "yes", "on"}
+AUTO_RESET_MINUTES = max(0, int(os.getenv("DENTAL_AUTO_RESET_MINUTES", "0")))
+
+
+async def automatic_reset_loop() -> None:
+    while True:
+        await asyncio.sleep(AUTO_RESET_MINUTES * 60)
+        reset_synthetic_data("Automatic public sandbox reset")
 
 
 @contextlib.asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    yield
+    reset_task = None
+    if DEMO_MODE and PUBLIC_SANDBOX and AUTO_RESET_MINUTES:
+        reset_task = asyncio.create_task(automatic_reset_loop())
+    try:
+        yield
+    finally:
+        if reset_task:
+            reset_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reset_task
 
 
 app = FastAPI(
@@ -622,6 +640,8 @@ def metadata():
         "mock_pms": "dental PMS-style training sandbox",
         "auth_mode": AUTH_MODE,
         "demo_mode": DEMO_MODE,
+        "public_sandbox": PUBLIC_SANDBOX,
+        "automatic_reset_minutes": AUTO_RESET_MINUTES if PUBLIC_SANDBOX else 0,
         "modules": ["Appointment Book", "Appointment Queue", "Patient Search", "Patient Alerts", "Reminder Status", "Audit Log"],
         "appointment_types": APPOINTMENT_TYPES,
         "confirmation_statuses": CONFIRMATION_STATUSES,
@@ -1079,6 +1099,12 @@ def seed_queue_scenario(scenario: str):
 def reset_demo_data():
     if not DEMO_MODE:
         raise HTTPException(status_code=404, detail="Demo endpoints are disabled")
+    reset_synthetic_data("Manual synthetic demo reset")
+    return {"message": "Synthetic demo data reset", "demo_mode": True}
+
+
+def reset_synthetic_data(reason: str) -> None:
+    """Atomically restore the fictional baseline; used only by explicit demo modes."""
     with get_conn() as conn:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute("DELETE FROM appointments")
@@ -1086,8 +1112,7 @@ def reset_demo_data():
         conn.execute("DELETE FROM patients")
         conn.execute("DELETE FROM audit_log")
         seed_demo_data(conn)
-        audit(conn, "demo_reset", "Reset synthetic demo data")
-    return {"message": "Synthetic demo data reset", "demo_mode": True}
+        audit(conn, "demo_reset", reason)
 
 
 @app.get("/audit-log", tags=["Audit"])
@@ -1113,7 +1138,17 @@ def get_stats(date: Optional[str] = None):
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def staff_ui():
-    return HTMLResponse(STAFF_UI_HTML.replace("{{PRACTICE_NAME}}", html.escape(PRACTICE_NAME)))
+    sandbox_notice = (
+        '<div class="help"><b>Public synthetic sandbox:</b> All names and records are fictional. '
+        f'The shared workspace automatically resets every {AUTO_RESET_MINUTES} minutes and may reset when idle.</div>'
+        if PUBLIC_SANDBOX
+        else ""
+    )
+    return HTMLResponse(
+        STAFF_UI_HTML.replace("{{PRACTICE_NAME}}", html.escape(PRACTICE_NAME)).replace(
+            "{{SANDBOX_NOTICE}}", sandbox_notice
+        )
+    )
 
 
 STAFF_UI_HTML = r"""<!DOCTYPE html>
@@ -1126,6 +1161,7 @@ STAFF_UI_HTML = r"""<!DOCTYPE html>
 </style></head>
 <body><header><h1>🦷 {{PRACTICE_NAME}}</h1><span class="pill">After-Hours Receptionist + Mock Dental PMS Queue</span><span style="margin-left:auto" id="clock"></span></header>
 <div class="wrap">
+{{SANDBOX_NOTICE}}
 <div class="help"><b>Human-approved safety boundary:</b> Ava collects after-hours requests and creates queue cards. Staff reviews, calls back, or approves before any mock Appointment Book write.</div>
 <div class="stats"><div class="stat"><div id="s-total" class="num">—</div><div class="lbl">Today</div></div><div class="stat"><div id="s-done" class="num">—</div><div class="lbl">Completed</div></div><div class="stat"><div id="s-rem" class="num">—</div><div class="lbl">Remaining</div></div><div class="stat"><div id="s-pts" class="num">—</div><div class="lbl">Patients</div></div><div class="stat"><div id="s-queue" class="num">—</div><div class="lbl">Queued</div></div></div>
 <div class="tabs"><button onclick="showTab('queue')">AI Queue</button><button onclick="showTab('schedule')">Appointment Book</button><button onclick="showTab('audit')">Audit Log</button><input type="date" id="dateInput" onchange="currentDate=this.value;loadAll()" style="max-width:170px"><button onclick="currentDate=new Date().toISOString().slice(0,10);loadAll()">Today</button><input type="password" id="authToken" placeholder="Optional role token" style="max-width:200px"><button class="light" onclick="saveToken()">Use token</button></div>
