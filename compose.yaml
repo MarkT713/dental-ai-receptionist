@@ -2,8 +2,23 @@ services:
   receptionist:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       DENTAL_SEED_DEMO_DATA: "true"
+      DENTAL_DEMO_MODE: "true"
+      DENTAL_AUTH_MODE: disabled
       AI_PROVIDER: deterministic
+    volumes:
+      - dental-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
     restart: unless-stopped
+
+volumes:
+  dental-data:

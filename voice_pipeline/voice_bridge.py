@@ -3,8 +3,8 @@
 
 Modes:
 - after_hours (default): collect patient request and create an Appointment Queue card.
-- booking_demo: legacy direct mock-booking flow for show-and-tell demos.
-- eagi: Asterisk stub entrypoint; currently prints the greeting.
+- booking_demo: explicit opt-in legacy mock booking; disabled by default.
+- live transports: not included; unsupported modes fail closed.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ class SessionState:
     awaiting_more: bool = False
     turns: int = 0
     transferred: bool = False
+    transfer_requested: bool = False
     log: List[str] = field(default_factory=list)
 
     @property
@@ -53,6 +54,12 @@ class VoiceStateMachine:
     def __init__(self, pms: Optional[PMSClient] = None, mode: Optional[str] = None):
         self.pms = pms or PMSClient()
         self.mode = (mode or DEFAULT_MODE or "after_hours").strip().lower()
+        if self.mode == "booking_demo" and os.getenv("ALLOW_UNSAFE_DIRECT_BOOKING_DEMO", "false").lower() not in {
+            "1", "true", "yes"
+        }:
+            raise RuntimeError("booking_demo is disabled; after_hours preserves the human-approval boundary")
+        if self.mode not in {"after_hours", "booking_demo"}:
+            raise ValueError(f"Unsupported receptionist mode: {self.mode}")
         self.state = SessionState()
 
     def _say(self, text: str) -> str:
@@ -145,8 +152,12 @@ class VoiceStateMachine:
         return "Periodic Exam"
 
     def transfer_to_staff(self, reason: str = "caller request") -> str:
-        self.state.transferred = True
-        return self._say(f"I will transfer you to our front desk now at extension {STAFF_EXTENSION}. Reason: {reason}.")
+        self.state.transfer_requested = True
+        self.state.awaiting_more = True
+        return self._say(
+            f"I can’t complete a live transfer in this demo. I’ll flag a front-desk callback request "
+            f"for extension {STAFF_EXTENSION}. Reason: {reason}. Is there anything else I should add?"
+        )
 
     def start(self) -> str:
         if self.mode == "booking_demo":
@@ -348,16 +359,16 @@ def run_console_demo() -> None:
             return
 
 
-def run_eagi_stub() -> None:
-    """Live-call entrypoint placeholder for Asterisk EAGI mode."""
-    sm = VoiceStateMachine(mode="after_hours")
-    print(sm.start(), flush=True)
+def reject_unconfigured_live_transport() -> None:
+    raise SystemExit(
+        "Live telephony is not included in this public demo. Configure and test a provider adapter before deployment."
+    )
 
 
 def main() -> None:
-    mode = os.getenv("DENTAL_AI_MODE", os.getenv("DENTAL_AI_MODE", "console")).strip().lower()
-    if mode == "eagi":
-        run_eagi_stub()
+    mode = os.getenv("DENTAL_AI_MODE", "console").strip().lower()
+    if mode in {"eagi", "live", "telephony"}:
+        reject_unconfigured_live_transport()
     else:
         run_console_demo()
 

@@ -1,7 +1,7 @@
 # Dental AI Receptionist
 
-![Tests](https://img.shields.io/badge/tests-14%20passing-brightgreen)
-![Evaluations](https://img.shields.io/badge/evals-5%2F5%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-34%20passing-brightgreen)
+![Evaluations](https://img.shields.io/badge/evals-46%2F46%20passing-brightgreen)
 
 A privacy-conscious **after-hours dental intake and staff-approval workflow** built with FastAPI, SQLite, structured AI extraction, a deterministic safety policy, and a mock dental practice-management dashboard.
 
@@ -38,9 +38,13 @@ The AI prepares work. A human approves consequential scheduling actions.
 - Existing/new-patient intake and identity-confidence labels
 - Staff approval queue with suggested slots
 - Approval-gated scheduling into a mock PMS
-- Audit trail for queue and appointment actions
+- Strict API models, legal queue transitions, atomic/idempotent writes, and duration-aware provider/chair conflicts
+- Optional viewer/staff/manager token roles and demo-mode gating
+- Privacy-reduced audit trail, request IDs, security headers, rate limits, and aggregate operational metrics
 - Embedded staff dashboard and OpenAPI documentation
-- Regression evaluations for routine, urgent, incomplete, and adversarial transcripts
+- Regression evaluations for routine, urgent, incomplete, negated, limited Spanish, natural-date, and adversarial transcripts
+- Provider-neutral voice contracts and a truthful synthetic turn simulation—no live-audio claim
+- Hash-locked dependencies, pinned non-root container, security scans, Dependabot, and CycloneDX SBOM tooling
 - Synthetic data only; no production credentials or patient records
 
 ## Quick start
@@ -89,15 +93,24 @@ pytest -q
 python scripts/run_evals.py
 ```
 
-Verified baseline at publication:
+Current verified local release baseline:
 
-- `14` automated tests passing
-- `5/5` evaluation cases passing
-- `16/16` field assertions matched
+- `34` automated tests passing
+- `46/46` evaluation cases passing
+- `127/127` field assertions matched
+- `1.00` precision/recall/F1 for urgent and prompt-injection detection on this synthetic corpus
 
-The evaluation set is intentionally small and synthetic. It is a regression suite, not clinical validation.
+The evaluation set is synthetic and deterministic. It is a regression suite, not clinical or unrestricted-language validation. See [Evaluation methodology](docs/EVALUATIONS.md).
 
-`docs/ci.yml.example` contains a ready-to-enable GitHub Actions workflow for linting, tests, evaluations, compilation, and container builds.
+`docs/ci.yml.example` contains a ready-to-enable GitHub Actions workflow for linting, tests, evaluations, security scans, SBOM generation, compilation, and a non-root container smoke test. It remains an example until repository workflow authorization is available.
+
+To exercise the credential-free voice boundary:
+
+```bash
+python scripts/run_voice_simulation.py
+```
+
+The simulation uses UTF-8 test bytes, not speech audio. It verifies that a routine conversation creates one staff-review card and zero appointments. See [Voice boundary](docs/VOICE.md).
 
 ## Optional model provider
 
@@ -119,10 +132,13 @@ practice_management_software/
   intake_engine.py        Structured extraction and safety classification
 voice_pipeline/
   voice_bridge.py         Deterministic receptionist conversation state machine
+  adapters.py             Provider-neutral STT/TTS contracts and synthetic adapters
   pms_client.py           Narrow PMS API adapter
 scripts/
   run_after_hours_demo.py Repeatable queue demonstration
   run_evals.py            Structured intake regression evaluator
+  run_voice_simulation.py Credential-free turn simulation
+  secret_scan.py          Public-release artifact and secret scanner
 evals/cases.json          Synthetic evaluation cases
 tests/                    API, safety, queue, and conversation tests
 docs/                     Architecture, privacy, threat model, screenshot
@@ -137,14 +153,15 @@ docs/                     Architecture, privacy, threat model, screenshot
 - Scheduling additionally requires an exact matched demo patient.
 - The mock PMS is isolated from real dental systems.
 
-See [Architecture](docs/ARCHITECTURE.md), [Privacy](docs/PRIVACY.md), and [Threat Model](docs/THREAT_MODEL.md).
+See [Architecture](docs/ARCHITECTURE.md), [Privacy](docs/PRIVACY.md), [Deployment](docs/DEPLOYMENT.md), and [Threat Model](docs/THREAT_MODEL.md).
 
 ## Honest limitations
 
 - The public repository demonstrates browser and console intake; it does not ship a production phone carrier configuration or full-duplex audio bridge.
-- Authentication/RBAC are not implemented; bind locally and do not expose this demo to the internet.
+- Shared viewer/staff/manager tokens are available for deployment demonstrations but are not production identity management; a real service needs named users, MFA, revocation, and tenant-aware authorization.
 - SQLite and the embedded UI are appropriate for a portfolio sandbox, not a multi-office deployment.
 - Safety rules are illustrative and require office-specific legal and clinical review.
+- English and limited Spanish examples are tested; unrestricted bilingual understanding is not claimed.
 - No real Eaglesoft, Dentrix, or other PMS integration is included or implied.
 - This software is not HIPAA compliant merely because it has privacy-conscious design.
 

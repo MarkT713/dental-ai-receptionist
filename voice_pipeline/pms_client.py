@@ -8,14 +8,16 @@ class PMSClient:
     def __init__(self, base_url: Optional[str] = None, timeout: int = 10):
         self.base_url = (base_url or os.getenv("PMS_BASE_URL", "http://localhost:8000")).rstrip("/")
         self.timeout = timeout
+        token = os.getenv("PMS_API_TOKEN", "").strip()
+        self.headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
-        r = requests.get(f"{self.base_url}{path}", params=params, timeout=self.timeout)
+        r = requests.get(f"{self.base_url}{path}", params=params, headers=self.headers, timeout=self.timeout)
         r.raise_for_status()
         return r.json()
 
     def _post(self, path: str, payload: Dict[str, Any]) -> Any:
-        r = requests.post(f"{self.base_url}{path}", json=payload, timeout=self.timeout)
+        r = requests.post(f"{self.base_url}{path}", json=payload, headers=self.headers, timeout=self.timeout)
         r.raise_for_status()
         return r.json()
 
@@ -65,7 +67,7 @@ class PMSClient:
                 "duration_minutes": duration_minutes,
                 "appointment_type": appointment_type,
                 "chair": chair,
-                "note": "Created by BrightSmile Dental receptionist sandbox.",
+                "note": "Created by the synthetic dental receptionist sandbox.",
             },
         )
 
@@ -91,7 +93,7 @@ class PMSClient:
                 "reason_for_visit": reason_for_visit,
                 "appointment_type": appointment_type,
                 "risk_level": risk_level,
-                "source": "BrightSmile Dental AI receptionist",
+                "source": "Synthetic dental AI receptionist",
                 "staff_note": "Receptionist-agent draft. Staff approval required before live PMS use.",
             },
         )

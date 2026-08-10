@@ -11,7 +11,7 @@ import json
 import os
 import re
 from dataclasses import asdict, dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import requests
@@ -26,15 +26,43 @@ URGENT_TERMS = (
     "fever",
     "trouble breathing",
     "uncontrolled bleeding",
+    "difficulty breathing",
+    "can't breathe",
+    "cannot breathe",
+    "facial swelling",
+    "hinchazón",
+    "dolor intenso",
+    "dolor severo",
+    "sangrado",
+    "fiebre",
+    "dificultad para respirar",
+    "toothache",
+    "broken tooth",
+    "knocked out tooth",
+    "emergency",
+    "dolor de muela",
+    "diente roto",
+    "emergencia",
 )
 INJECTION_TERMS = (
     "ignore previous",
     "ignore all previous",
-    "system prompt",
-    "developer message",
     "reveal your instructions",
     "print the secret",
-    "api key",
+    "ignore prior",
+    "disregard instructions",
+    "bypass safety",
+    "jailbreak",
+    "act as system",
+    "ignora las instrucciones",
+    "modo desarrollador",
+)
+INJECTION_PATTERNS = (
+    r"\bignore\b.{0,24}\b(?:previous|prior|system|developer)\b",
+    r"\bdisregard\b.{0,24}\b(?:instructions?|rules?|prompt)\b",
+    r"\b(?:reveal|show|print)\b.{0,24}\b(?:secret|prompt|instructions?|api key)\b",
+    r"\b(?:ignora|omite)\b.{0,30}\b(?:instrucciones|reglas|mensaje)\b",
+    r"\b(?:muestra|revela|imprime)\b.{0,30}\b(?:secreto|clave|instrucciones)\b",
 )
 
 
@@ -53,6 +81,7 @@ class IntakeResult:
     missing_fields: list[str]
     confidence: float
     engine: str
+    language: str = "en"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -72,64 +101,128 @@ def _extract_name(text: str) -> Optional[str]:
     patterns = (
         r"\b(?:my name is|this is|i am|i'm)\s+([A-Za-z][A-Za-z'-]+)\s+([A-Za-z][A-Za-z'-]+)",
         r"\bpatient(?: name)?(?: is|:)\s*([A-Za-z][A-Za-z'-]+)\s+([A-Za-z][A-Za-z'-]+)",
+        r"\b(?:me llamo|soy)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'-]+)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ'-]+)",
     )
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            return f"{match.group(1).title()} {match.group(2).title()}"
+            candidate = f"{match.group(1)} {match.group(2)}"
+            if any(word in candidate.lower().split() for word in {"existing", "current", "returning", "new", "patient"}):
+                continue
+            return candidate.title()
     return None
 
 
-def _extract_date(text: str) -> Optional[str]:
+def _extract_date(text: str, reference_date: Optional[date] = None) -> Optional[str]:
+    base_date = reference_date or date.today()
     iso = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
     if iso:
-        return iso.group(1)
+        try:
+            return date.fromisoformat(iso.group(1)).isoformat()
+        except ValueError:
+            return None
     lower = text.lower()
-    if "tomorrow" in lower:
-        return (date.today() + timedelta(days=1)).isoformat()
-    if "today" in lower:
-        return date.today().isoformat()
-    weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    for index, weekday in enumerate(weekdays):
-        if weekday in lower:
-            days = (index - date.today().weekday()) % 7 or 7
-            return (date.today() + timedelta(days=days)).isoformat()
+    if "tomorrow" in lower or ("mañana" in lower and "por la mañana" not in lower):
+        return (base_date + timedelta(days=1)).isoformat()
+    if "today" in lower or "hoy" in lower:
+        return base_date.isoformat()
+
+    month_match = re.search(
+        r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})\b",
+        lower,
+    )
+    if month_match:
+        month = datetime.strptime(month_match.group(1), "%B").month
+        try:
+            candidate = date(base_date.year, month, int(month_match.group(2)))
+            if candidate < base_date:
+                candidate = date(base_date.year + 1, month, int(month_match.group(2)))
+            return candidate.isoformat()
+        except ValueError:
+            return None
+
+    weekday_names = {
+        "monday": 0, "lunes": 0,
+        "tuesday": 1, "martes": 1,
+        "wednesday": 2, "miércoles": 2, "miercoles": 2,
+        "thursday": 3, "jueves": 3,
+        "friday": 4, "viernes": 4,
+        "saturday": 5, "sábado": 5, "sabado": 5,
+        "sunday": 6, "domingo": 6,
+    }
+    for weekday, index in weekday_names.items():
+        if re.search(rf"\b{re.escape(weekday)}\b", lower):
+            days = (index - base_date.weekday()) % 7 or 7
+            return (base_date + timedelta(days=days)).isoformat()
     return None
+
+
+def _contains_unnegated(text: str, term: str) -> bool:
+    for match in re.finditer(re.escape(term), text, re.IGNORECASE):
+        prefix = text[max(0, match.start() - 35):match.start()]
+        suffix = text[match.end():match.end() + 35]
+        negated = re.search(r"\b(?:no|not|without|den(?:y|ies|ied)|sin)\b[^.!?]{0,24}$", prefix, re.IGNORECASE)
+        third_party = re.search(
+            r"\b(?:brother|sister|mother|father|friend|husband|wife|son|daughter|hermano|hermana|madre|padre)\b[^.!?]{0,24}$",
+            prefix,
+            re.IGNORECASE,
+        )
+        resolved = re.search(r"^.{0,20}\b(?:stopped|resolved|ended|went away|se detuvo|se resolvió)\b", suffix, re.IGNORECASE)
+        restarted = re.search(r"\b(?:restarted|returned|came back|volvió)\b", suffix, re.IGNORECASE)
+        if not negated and not third_party and not (resolved and not restarted):
+            return True
+    return False
+
+
+def _detected_language(text: str) -> str:
+    spanish_markers = (" me llamo ", " necesito ", " paciente ", " limpieza ", " dolor ", " hinchazón ", " por la ")
+    padded = f" {text.lower()} "
+    return "es" if any(marker in padded for marker in spanish_markers) else "en"
 
 
 def _appointment_type(text: str) -> str:
     lower = text.lower()
-    if any(term in lower for term in URGENT_TERMS) or any(term in lower for term in ("toothache", "broken tooth", "emergency")):
+    if any(_contains_unnegated(lower, term) for term in URGENT_TERMS) or any(
+        _contains_unnegated(lower, term)
+        for term in ("toothache", "broken tooth", "emergency", "dolor de muela", "diente roto", "emergencia")
+    ):
         return "Limited/Emergency"
-    if any(term in lower for term in ("cleaning", "hygiene", "prophy")):
+    if any(term in lower for term in ("cleaning", "hygiene", "prophy", "limpieza")):
         return "Prophy"
-    if any(term in lower for term in ("new patient", "first visit")):
+    if any(term in lower for term in ("new patient", "first visit", "paciente nuevo", "primera visita")):
         return "New Patient Exam"
-    if "consult" in lower:
+    if "consult" in lower or "consulta" in lower:
         return "Consult"
     return "Periodic Exam"
 
 
-def deterministic_extract(transcript: str) -> IntakeResult:
+def deterministic_extract(transcript: str, reference_date: Optional[date] = None) -> IntakeResult:
     normalized = " ".join(transcript.strip().split())
     lower = normalized.lower()
     flags: list[str] = []
-    if any(term in lower for term in INJECTION_TERMS):
+    if any(term in lower for term in INJECTION_TERMS) or any(re.search(pattern, lower) for pattern in INJECTION_PATTERNS):
         flags.append("prompt_injection_attempt")
-    if any(term in lower for term in URGENT_TERMS):
+    if any(_contains_unnegated(lower, term) for term in URGENT_TERMS):
         flags.append("urgent_clinical_language")
-    if "trouble breathing" in lower or "uncontrolled bleeding" in lower:
+    emergency_terms = ("trouble breathing", "difficulty breathing", "can't breathe", "cannot breathe", "uncontrolled bleeding", "dificultad para respirar")
+    if any(_contains_unnegated(lower, term) for term in emergency_terms):
         flags.append("possible_emergency")
 
     phone = _extract_phone(normalized)
     name = _extract_name(normalized)
     existing: Optional[bool] = None
-    if re.search(r"\b(existing|current|returning) patient\b", lower):
+    if re.search(r"\b(existing|current|returning) patient\b", lower) or "ya soy paciente" in lower:
         existing = True
-    elif re.search(r"\b(new patient|first visit|never been)\b", lower):
+    elif re.search(r"\b(new patient|first visit|never been)\b", lower) or any(
+        phrase in lower for phrase in ("paciente nuevo", "primera visita", "nunca he ido")
+    ):
         existing = False
 
     requested_time = next((part for part in ("morning", "afternoon", "evening") if part in lower), None)
+    if requested_time is None and "por la mañana" in lower:
+        requested_time = "morning"
+    if requested_time is None and "por la tarde" in lower:
+        requested_time = "afternoon"
     if requested_time is None:
         time_match = re.search(r"\b(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm)\b", lower)
         if time_match:
@@ -148,7 +241,7 @@ def deterministic_extract(transcript: str) -> IntakeResult:
         patient_name=name,
         phone_number=phone,
         existing_patient=existing,
-        requested_date=_extract_date(normalized),
+        requested_date=_extract_date(normalized, reference_date),
         requested_time=requested_time,
         appointment_type=_appointment_type(normalized),
         reason_for_visit=normalized[:1000],
@@ -158,6 +251,7 @@ def deterministic_extract(transcript: str) -> IntakeResult:
         missing_fields=missing,
         confidence=confidence,
         engine="deterministic-v1",
+        language=_detected_language(normalized),
     )
 
 
@@ -184,8 +278,53 @@ def _llm_extract(transcript: str) -> IntakeResult:
     )
     response.raise_for_status()
     payload = json.loads(response.json()["choices"][0]["message"]["content"])
-    payload["engine"] = f"openai-compatible:{model}"
-    return IntakeResult(**{key: payload[key] for key in schema_keys})
+    if not isinstance(payload, dict):
+        raise ValueError("Model output must be a JSON object")
+
+    deterministic = deterministic_extract(transcript)
+    allowed_types = {"Periodic Exam", "Prophy", "New Patient Exam", "Limited/Emergency", "Crown Seat", "Consult"}
+    patient_name = payload.get("patient_name") if isinstance(payload.get("patient_name"), str) else deterministic.patient_name
+    phone_number = payload.get("phone_number") if isinstance(payload.get("phone_number"), str) else deterministic.phone_number
+    if phone_number and not _extract_phone(phone_number):
+        phone_number = deterministic.phone_number
+    appointment_type = payload.get("appointment_type")
+    if appointment_type not in allowed_types:
+        appointment_type = deterministic.appointment_type
+    flags = {
+        flag for flag in payload.get("safety_flags", [])
+        if isinstance(flag, str) and flag in {"prompt_injection_attempt", "urgent_clinical_language", "possible_emergency"}
+    }
+    flags.update(deterministic.safety_flags)
+    missing = []
+    if not patient_name:
+        missing.append("patient_name")
+    if not phone_number:
+        missing.append("callback_phone")
+    risk = payload.get("risk_level") if payload.get("risk_level") in {"routine", "needs_review", "urgent"} else "needs_review"
+    if "urgent_clinical_language" in flags:
+        risk = "urgent"
+    elif missing or "prompt_injection_attempt" in flags:
+        risk = "needs_review"
+    try:
+        confidence = max(0.0, min(1.0, float(payload.get("confidence", deterministic.confidence))))
+    except (TypeError, ValueError):
+        confidence = deterministic.confidence
+    return IntakeResult(
+        patient_name=patient_name,
+        phone_number=_extract_phone(phone_number) if phone_number else None,
+        existing_patient=payload.get("existing_patient") if isinstance(payload.get("existing_patient"), bool) else deterministic.existing_patient,
+        requested_date=payload.get("requested_date") if isinstance(payload.get("requested_date"), str) else deterministic.requested_date,
+        requested_time=payload.get("requested_time") if isinstance(payload.get("requested_time"), str) else deterministic.requested_time,
+        appointment_type=appointment_type,
+        reason_for_visit=(payload.get("reason_for_visit") if isinstance(payload.get("reason_for_visit"), str) else deterministic.reason_for_visit)[:1000],
+        risk_level=risk,
+        automation_mode="stop_and_escalate" if risk == "urgent" else "human_approval_required",
+        safety_flags=sorted(flags),
+        missing_fields=missing,
+        confidence=round(confidence, 2),
+        engine=f"openai-compatible:{model}",
+        language=payload.get("language") if payload.get("language") in {"en", "es"} else deterministic.language,
+    )
 
 
 def extract_intake(transcript: str) -> IntakeResult:

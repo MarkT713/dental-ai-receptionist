@@ -2,6 +2,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 
 class FakePMS:
     def __init__(self):
@@ -94,8 +96,9 @@ def test_after_hours_urgent_flow_creates_urgent_queue_not_transfer_only():
     assert pms.bookings == []
 
 
-def test_demo_booking_mode_can_still_book_directly():
+def test_demo_booking_mode_can_still_book_directly(monkeypatch):
     voice = load_voice_module()
+    monkeypatch.setenv("ALLOW_UNSAFE_DIRECT_BOOKING_DEMO", "true")
     pms = FakePMS()
     sm = voice.VoiceStateMachine(pms=pms, mode="booking_demo")
 
@@ -109,3 +112,20 @@ def test_demo_booking_mode_can_still_book_directly():
     assert "appointment confirmed" in reply.lower()
     assert len(pms.bookings) == 1
     assert pms.queue_items == []
+
+
+def test_direct_booking_demo_is_disabled_by_default(monkeypatch):
+    voice = load_voice_module()
+    monkeypatch.delenv("ALLOW_UNSAFE_DIRECT_BOOKING_DEMO", raising=False)
+    with pytest.raises(RuntimeError, match="human-approval boundary"):
+        voice.VoiceStateMachine(pms=FakePMS(), mode="booking_demo")
+
+
+def test_human_request_does_not_claim_an_unsupported_live_transfer():
+    voice = load_voice_module()
+    sm = voice.VoiceStateMachine(pms=FakePMS(), mode="after_hours")
+    response = sm.step("Please transfer me to a human")
+    assert "can’t complete a live transfer" in response.lower()
+    assert "callback" in response.lower()
+    assert sm.state.transfer_requested is True
+    assert sm.state.transferred is False

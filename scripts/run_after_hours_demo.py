@@ -6,12 +6,11 @@ Requires the mock PMS API running at PMS_BASE_URL (default http://127.0.0.1:8000
 
 from __future__ import annotations
 
-import json
 import os
 import sys
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
+
+import requests
 
 BASE_URL = os.getenv("PMS_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 SCENARIOS = ["routine", "urgent", "new_patient", "needs_info"]
@@ -24,18 +23,14 @@ class ApiError(Exception):
 
 
 def request(method: str, path: str, payload: dict | None = None) -> dict | list:
-    data = None if payload is None else json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        f"{BASE_URL}{path}",
-        data=data,
-        method=method,
-        headers={"Content-Type": "application/json"},
-    )
+    token = os.getenv("PMS_API_TOKEN", "").strip()
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        raise ApiError(exc.code, exc.read().decode("utf-8")) from exc
+        response = requests.request(method, f"{BASE_URL}{path}", json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.HTTPError as exc:
+        raise ApiError(exc.response.status_code, exc.response.text) from exc
 
 
 def main() -> int:
