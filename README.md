@@ -102,6 +102,8 @@ The request is analyzed and queued for staff review. It is **not** booked direct
 ```bash
 pytest -q
 python scripts/run_evals.py
+python -m pip install -e '.[governance]'
+python scripts/run_guardbench.py
 ```
 
 Verified hosted-demo baseline:
@@ -113,7 +115,9 @@ Verified hosted-demo baseline:
 
 The evaluation set is synthetic and deterministic. It is a regression suite, not clinical or unrestricted-language validation. See [Evaluation methodology](docs/EVALUATIONS.md).
 
-`docs/ci.yml.example` contains a ready-to-enable GitHub Actions workflow for linting, tests, evaluations, security scans, SBOM generation, compilation, and a non-root container smoke test. It remains an example until repository workflow authorization is available.
+The GuardBench run executes the real deterministic intake engine—not canned GuardBench fixture responses—and applies a separate high-assurance policy across all 46 cases. It records per-case evidence, corpus and policy hashes, Git/Python provenance, a tamper-evident local audit chain, and a human-approval state. A successful automated run is labeled `conditional_pass` / `awaiting_approval`, never automatically approved.
+
+GitHub Actions runs linting, tests, native and GuardBench evaluation gates, security scans, SBOM generation, compilation, and a hardened non-root container smoke test on every push and pull request.
 
 To exercise the credential-free voice boundary:
 

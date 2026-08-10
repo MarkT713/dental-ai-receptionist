@@ -23,13 +23,15 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install development dependencies
-        run: pip install -e '.[dev]'
+        run: pip install -e '.[dev,governance]'
       - name: Lint
         run: ruff check --no-force-exclude practice_management_software/main.py practice_management_software/intake_engine.py voice_pipeline scripts tests
       - name: Unit and API tests
         run: pytest -q
       - name: Intake safety evaluation gate
         run: python scripts/run_evals.py
+      - name: GuardBench governance gate
+        run: python scripts/run_guardbench.py
       - name: Synthetic voice-turn simulation
         run: python scripts/run_voice_simulation.py
       - name: Public-release secret scan
@@ -47,6 +49,7 @@ jobs:
           name: safety-eval-and-sbom
           path: |
             evals/latest-report.json
+            evals/guardbench-latest-report.json
             sbom.json
 
   container:

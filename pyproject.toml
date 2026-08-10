@@ -26,6 +26,9 @@ dev = [
   "pip-audit>=2.8,<3",
   "cyclonedx-bom>=5,<8",
 ]
+governance = [
+  "guardbench @ git+https://github.com/MarkT713/llm-eval-governance-harness.git@095bd63ccbddc1597bd8e093c5c600f73684b42a",
+]
 
 [tool.setuptools]
 py-modules = []

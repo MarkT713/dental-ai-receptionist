@@ -18,3 +18,5 @@ transcripts/
 coverage.xml
 htmlcov/
 sbom.json
+evals/.guardbench-runs/
+evals/.guardbench-audit.jsonl

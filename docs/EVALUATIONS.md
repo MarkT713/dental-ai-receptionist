@@ -13,7 +13,7 @@ The deterministic engine is evaluated with synthetic transcripts only. The suite
 - prompt-injection attempts;
 - limited English/Spanish intake examples.
 
-Every case declares expected structured fields. Relative dates are not scored as fixed calendar values, avoiding time-dependent fixtures.
+Every case declares expected structured fields. Relative-date cases carry an explicit reference date so their expected calendar values remain deterministic.
 
 ## Metrics and release gate
 
@@ -30,6 +30,19 @@ The runner writes the stable report `evals/latest-report.json` and exits nonzero
 - prompt-injection recall is at least 95%.
 
 The report includes case and assertion accuracy, category pass counts, and precision/recall/F1 for urgent and prompt-injection detection.
+
+## GuardBench governance evaluation
+
+Install and run the separately versioned governance harness:
+
+```bash
+python -m pip install -e '.[governance]'
+python scripts/run_guardbench.py
+```
+
+`scripts/run_guardbench.py` uses a receptionist-specific adapter to execute `deterministic_extract()` for every case. Fixture responses embedded in the GuardBench corpus are deliberately unused. The adapter renders structured field evidence for deterministic grading, including explicit `allow` versus `escalate` behavior.
+
+The governed policy requires all 46 cases and every category to pass, with zero critical/high failures. It records corpus and policy hashes, runtime/Git provenance, and a chained audit event. Passing automation produces `awaiting_approval`; only an independent authorized reviewer can create an approved result.
 
 ## Interpretation
 
