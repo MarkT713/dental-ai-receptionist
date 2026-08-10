@@ -116,7 +116,7 @@ Verified hosted-demo baseline:
 
 The evaluation set is synthetic and deterministic. It is a regression suite, not clinical or unrestricted-language validation. See [Evaluation methodology](docs/EVALUATIONS.md).
 
-The default GuardBench run sends 41 synthetic cases through FastAPI middleware, request validation, routing, the real deterministic intake engine, and response serialization. It verifies that the analyze-only endpoint does not mutate appointments or the approval queue. The direct-engine mode separately covers all 46 cases, including five clock-independent relative-date fixtures. Neither mode uses canned GuardBench responses. Both prohibit tool execution, retain per-trial structured evidence and hashes, and require independent human approval after a `conditional_pass`.
+The default GuardBench run starts an ephemeral Uvicorn server with viewer-only token authentication and a temporary SQLite database, then sends 41 synthetic cases over loopback TCP through FastAPI middleware, validation, routing, the real intake engine, and serialization. Before and after every request it hashes the schema and every row in every business table; any persistent mutation becomes a trusted `database_mutation` execution trace and fails the gate. This observes durable SQLite effects, not arbitrary external side effects. Direct-engine mode separately covers all 46 cases, including five fixed-reference-date fixtures. Neither mode uses canned GuardBench responses, and independent human approval remains mandatory.
 
 GitHub Actions runs linting, tests, native and GuardBench evaluation gates, security scans, SBOM generation, compilation, and a hardened non-root container smoke test on every push and pull request.
 

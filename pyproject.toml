@@ -20,15 +20,15 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8,<10",
-  "httpx>=0.27,<1",
+  "httpx>=0.27,<0.29",
   "ruff>=0.9,<1",
   "bandit>=1.8,<2",
   "pip-audit>=2.8,<3",
   "cyclonedx-bom>=5,<8",
 ]
 governance = [
-  "guardbench @ git+https://github.com/MarkT713/llm-eval-governance-harness.git@800164d87be2b34b5f7f0b7cf8b21de419689e60",
-  "httpx>=0.27,<1",
+  "guardbench @ git+https://github.com/MarkT713/llm-eval-governance-harness.git@1d5153f04c84f64589bb308132fd66bc787bc32b",
+  "httpx>=0.27,<0.29",
 ]
 
 [tool.setuptools]

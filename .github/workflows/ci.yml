@@ -28,10 +28,15 @@ jobs:
         run: ruff check --no-force-exclude practice_management_software/main.py practice_management_software/intake_engine.py voice_pipeline scripts tests
       - name: Unit and API tests
         run: pytest -q
-      - name: Intake safety evaluation gate
-        run: python scripts/run_evals.py
       - name: GuardBench governance gate
         run: python scripts/run_guardbench.py --mode http --trials 3
+      - name: Verify governed evidence replay
+        run: >-
+          guardbench replay evals/guardbench-http-latest-report.json
+          --corpus evals/guardbench-http-cases.json
+          --audit evals/.guardbench-audit.jsonl
+      - name: Intake safety evaluation gate
+        run: python scripts/run_evals.py
       - name: Synthetic voice-turn simulation
         run: python scripts/run_voice_simulation.py
       - name: Public-release secret scan
@@ -51,6 +56,9 @@ jobs:
             evals/latest-report.json
             evals/guardbench-http-latest-report.json
             evals/.guardbench-runs/
+            evals/.guardbench-audit.jsonl
+            evals/guardbench-http-cases.json
+            evals/guardbench-http-policy.json
             sbom.json
           include-hidden-files: true
 

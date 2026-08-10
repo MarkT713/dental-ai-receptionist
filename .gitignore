@@ -20,3 +20,4 @@ htmlcov/
 sbom.json
 evals/.guardbench-runs/
 evals/.guardbench-audit.jsonl
+evals/guardbench-http-latest-report.json
