@@ -68,7 +68,7 @@ app = FastAPI(
         "Dental Training Sandbox with dental PMS-style Appointment Book, "
         "patient search, appointment queue, confirmation status, and alert concepts."
     ),
-    version="1.1.0",
+    version="1.2.0",
     lifespan=lifespan,
 )
 

@@ -8,6 +8,8 @@ A privacy-conscious **after-hours dental intake and staff-approval workflow** bu
 
 > **Portfolio/demo software only.** It uses synthetic patients and a mock PMS. It is not a live integration, medical device, or claim of HIPAA compliance.
 
+**Live synthetic demo:** https://dental-ai-receptionist-demo.onrender.com
+
 ![Dashboard](docs/dashboard.png)
 
 ## Why this project exists
@@ -102,7 +104,7 @@ pytest -q
 python scripts/run_evals.py
 ```
 
-Current verified local release baseline:
+Verified hosted-demo baseline:
 
 - `35` automated tests passing
 - `46/46` evaluation cases passing
