@@ -1,0 +1,9 @@
+services:
+  receptionist:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DENTAL_SEED_DEMO_DATA: "true"
+      AI_PROVIDER: deterministic
+    restart: unless-stopped
