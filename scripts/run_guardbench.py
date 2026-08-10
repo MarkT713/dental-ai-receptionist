@@ -7,12 +7,13 @@ import argparse
 import hashlib
 import json
 import shutil
-# Fixed Git provenance commands use resolved executable paths, fixed argv, and no shell/user input.
 import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+
+# Git provenance uses resolved executable paths, fixed argv, and no shell or user input.
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "practice_management_software"
