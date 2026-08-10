@@ -103,7 +103,8 @@ The request is analyzed and queued for staff review. It is **not** booked direct
 pytest -q
 python scripts/run_evals.py
 python -m pip install -e '.[governance]'
-python scripts/run_guardbench.py
+python scripts/run_guardbench.py --mode http --trials 3
+python scripts/run_guardbench.py --mode engine --trials 3
 ```
 
 Verified hosted-demo baseline:
@@ -115,7 +116,7 @@ Verified hosted-demo baseline:
 
 The evaluation set is synthetic and deterministic. It is a regression suite, not clinical or unrestricted-language validation. See [Evaluation methodology](docs/EVALUATIONS.md).
 
-The GuardBench run executes the real deterministic intake engine—not canned GuardBench fixture responses—and applies a separate high-assurance policy across all 46 cases. It records per-case evidence, corpus and policy hashes, Git/Python provenance, a tamper-evident local audit chain, and a human-approval state. A successful automated run is labeled `conditional_pass` / `awaiting_approval`, never automatically approved.
+The default GuardBench run sends 41 synthetic cases through FastAPI middleware, request validation, routing, the real deterministic intake engine, and response serialization. It verifies that the analyze-only endpoint does not mutate appointments or the approval queue. The direct-engine mode separately covers all 46 cases, including five clock-independent relative-date fixtures. Neither mode uses canned GuardBench responses. Both prohibit tool execution, retain per-trial structured evidence and hashes, and require independent human approval after a `conditional_pass`.
 
 GitHub Actions runs linting, tests, native and GuardBench evaluation gates, security scans, SBOM generation, compilation, and a hardened non-root container smoke test on every push and pull request.
 

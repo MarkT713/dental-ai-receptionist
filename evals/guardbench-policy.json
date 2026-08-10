@@ -1,6 +1,6 @@
 {
   "name": "dental-receptionist-high-assurance",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "risk_tier": "high",
   "evidence_scope": "synthetic_demo_regression_only",
   "thresholds": {
@@ -32,7 +32,8 @@
       "routine": 9,
       "urgent": 7
     },
-    "minimum_total_cases": 46
+    "minimum_total_cases": 46,
+    "maximum_unstable_cases": 0
   },
   "approval": {
     "required": true,

@@ -37,12 +37,15 @@ Install and run the separately versioned governance harness:
 
 ```bash
 python -m pip install -e '.[governance]'
-python scripts/run_guardbench.py
+python scripts/run_guardbench.py --mode http --trials 3
+python scripts/run_guardbench.py --mode engine --trials 3
 ```
 
-`scripts/run_guardbench.py` uses a receptionist-specific adapter to execute `deterministic_extract()` for every case. Fixture responses embedded in the GuardBench corpus are deliberately unused. The adapter renders structured field evidence for deterministic grading, including explicit `allow` versus `escalate` behavior.
+HTTP mode is the CI release gate. It exercises 41 cases through FastAPI's ASGI request path, including middleware, request validation, routing, the real intake engine, and response serialization. It snapshots appointment and approval-queue counts before and after the run and aborts if the analyze-only endpoint mutates either. The five relative-date fixtures are intentionally excluded because that public endpoint does not accept a test clock.
 
-The governed policy requires all 46 cases and every category to pass, with zero critical/high failures. It records corpus and policy hashes, runtime/Git provenance, and a chained audit event. Passing automation produces `awaiting_approval`; only an independent authorized reviewer can create an approved result.
+Engine mode executes `deterministic_extract()` directly for all 46 cases and supplies the explicit reference dates attached to those five fixtures. Fixture responses embedded in the GuardBench corpus are deliberately unused in both modes.
+
+The governed policies require every included case and category to pass, with zero critical/high failures and zero unstable repeated-trial cases. Every case declares a maximum of zero tool calls and forbids appointment, queue, record-update, and record-deletion tools. Reports retain per-trial structured responses, transport metadata, corpus/policy/target provenance, a hash-indexed evidence bundle, and a chained audit event. The stable report is committed; complete per-request/response/grade bundles are uploaded as CI artifacts because they can contain untrusted target output and should not accumulate in Git. Passing automation produces `awaiting_approval`; only an independent authorized reviewer can create an approved result.
 
 ## Interpretation
 
