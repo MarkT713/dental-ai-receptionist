@@ -107,11 +107,20 @@ def test_urgent_queue_card_has_recommended_action_and_action_audit(app_client):
     assert item["recommended_action"] == "Call patient ASAP / follow office emergency policy"
     assert item["automation_mode"] == "stop_and_escalate"
 
+    blocked = app_client.put(
+        f"/appointment-queue/{queue_id}",
+        json={"status": "approved", "staff_note": "Should be rejected by policy"},
+    )
+    assert blocked.status_code == 400
+    assert "cannot be approved" in blocked.json()["detail"]
+
     updated = app_client.put(
         f"/appointment-queue/{queue_id}",
         json={"status": "called", "staff_note": "Left voicemail and alerted clinical lead"},
     )
     assert updated.status_code == 200
+    illegal = app_client.put(f"/appointment-queue/{queue_id}", json={"status": "scheduled"})
+    assert illegal.status_code == 400
     audit = app_client.get("/audit-log").json()
     assert any("called" in row["summary"] and queue_id in row["payload"] for row in audit)
 
