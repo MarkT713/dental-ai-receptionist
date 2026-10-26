@@ -1,4 +1,4 @@
-FROM python:3.12-slim@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36
+FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
 
 LABEL org.opencontainers.image.title="Dental AI Receptionist" \
       org.opencontainers.image.description="Human-approved synthetic dental intake and staff queue demo" \
